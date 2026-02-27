@@ -18,6 +18,7 @@ interface Props {
   onTaskClick: (id: string) => void
   onTaskCreated: (task: Task) => void
   onTaskStateChanged: (taskId: string, state: string) => void
+  onTaskDone: (taskId: string) => void
 }
 
 export default function DayColumn({
@@ -34,6 +35,7 @@ export default function DayColumn({
   onTaskClick,
   onTaskCreated,
   onTaskStateChanged,
+  onTaskDone,
 }: Props) {
   const [isOver, setIsOver] = useState(false)
   const counter = useRef(0)
@@ -84,6 +86,7 @@ export default function DayColumn({
             onDragEnd={onDragEnd}
             onClick={onTaskClick}
             onStateChange={onTaskStateChanged}
+            onDone={onTaskDone}
           />
         ))}
       </div>
@@ -91,6 +94,7 @@ export default function DayColumn({
         householdId={householdId}
         dayWindow={day.day}
         weekStart={weekMonday}
+        members={members}
         onCreated={onTaskCreated}
       />
     </div>

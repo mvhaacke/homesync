@@ -48,12 +48,15 @@ const selectStyle: React.CSSProperties = {
 
 export default function TaskDetailPanel({ task, members, currentUserId, onClose, onTaskUpdated, onTaskDeleted }: Props) {
   const [title, setTitle] = useState(task.title)
+  const [description, setDescription] = useState(task.description ?? '')
   const [ingredients, setIngredients] = useState<Ingredient[]>(task.ingredients ?? [])
   const [deleting, setDeleting] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const descDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setTitle(task.title)
+    setDescription(task.description ?? '')
     setIngredients(task.ingredients ?? [])
   }, [task.id])
 
@@ -62,6 +65,14 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
   async function patch(fields: Partial<Task>) {
     const updated = await api.patchTask(task.id, fields)
     onTaskUpdated(updated)
+  }
+
+  function handleDescriptionChange(value: string) {
+    setDescription(value)
+    if (descDebounceRef.current) clearTimeout(descDebounceRef.current)
+    descDebounceRef.current = setTimeout(() => {
+      patch({ description: value || null })
+    }, 600)
   }
 
   function handleIngredientsChange(next: Ingredient[]) {
@@ -159,6 +170,23 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
           />
         </label>
 
+        {/* Notes */}
+        <label style={fieldStyle}>
+          <span style={labelStyle}>NOTES</span>
+          <textarea
+            value={description}
+            onChange={(e) => handleDescriptionChange(e.target.value)}
+            placeholder="Add notes…"
+            rows={3}
+            style={{
+              ...controlStyle,
+              resize: 'vertical',
+              fontFamily: 'inherit',
+              lineHeight: 1.5,
+            }}
+          />
+        </label>
+
         {/* Type */}
         <label style={fieldStyle}>
           <span style={labelStyle}>TYPE</span>
@@ -170,6 +198,21 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
             {TYPE_OPTIONS.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
+          </select>
+        </label>
+
+        {/* Recurrence */}
+        <label style={fieldStyle}>
+          <span style={labelStyle}>RECURRENCE</span>
+          <select
+            value={task.recurrence ?? ''}
+            onChange={(e) => patch({ recurrence: (e.target.value || null) as Task['recurrence'] })}
+            style={selectStyle}
+          >
+            <option value="">One-time</option>
+            <option value="weekly">Weekly</option>
+            <option value="biweekly">Every 2 weeks</option>
+            <option value="monthly">Monthly</option>
           </select>
         </label>
 

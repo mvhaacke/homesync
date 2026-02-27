@@ -101,6 +101,33 @@ export default function WeeklyGrid({ householdId }: Props) {
       .catch(() => setTasks((prev) => prev.map((t) => (t.id === taskId ? original : t))))
   }
 
+  async function handleDone(taskId: string) {
+    const task = tasks.find((t) => t.id === taskId)
+    if (!task) return
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, state: 'done' } : t)))
+    try {
+      await api.patchTask(taskId, { state: 'done' })
+      if (task.recurrence && task.week_start) {
+        const days = task.recurrence === 'weekly' ? 7 : task.recurrence === 'biweekly' ? 14 : 28
+        const next = new Date(task.week_start)
+        next.setUTCDate(next.getUTCDate() + days)
+        const nextWeekStart = next.toISOString().split('T')[0]
+        const newTask = await api.createTask(task.household_id, {
+          title: task.title,
+          description: task.description ?? undefined,
+          task_type: task.task_type,
+          assigned_to: task.assigned_to ?? undefined,
+          day_window: task.day_window ?? undefined,
+          week_start: nextWeekStart,
+          recurrence: task.recurrence,
+        })
+        setTasks((prev) => [...prev, newTask])
+      }
+    } catch {
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? task : t)))
+    }
+  }
+
   function handleDeleteTask(taskId: string) {
     setTasks((prev) => prev.filter((t) => t.id !== taskId))
     setSelectedTaskId(null)
@@ -191,6 +218,7 @@ export default function WeeklyGrid({ householdId }: Props) {
           onTaskClick={setSelectedTaskId}
           onTaskCreated={(task) => setTasks((prev) => [task, ...prev])}
           onTaskStateChanged={handleStateChange}
+          onTaskDone={handleDone}
         />
 
         {days.map((day) => (
@@ -209,6 +237,7 @@ export default function WeeklyGrid({ householdId }: Props) {
             onTaskClick={setSelectedTaskId}
             onTaskCreated={(task) => setTasks((prev) => [task, ...prev])}
             onTaskStateChanged={handleStateChange}
+            onTaskDone={handleDone}
           />
         ))}
 

@@ -51,6 +51,7 @@ export interface Task {
   time_of_day: string | null
   duration_minutes: number | null
   week_start: string | null
+  recurrence: 'weekly' | 'biweekly' | 'monthly' | null
   created_at: string
   updated_at: string
   ingredients: Ingredient[]
@@ -76,6 +77,7 @@ export type CreateTaskPayload = Pick<Task, 'title'> &
       | 'time_of_day'
       | 'duration_minutes'
       | 'week_start'
+      | 'recurrence'
       | 'ingredients'
     >
   >

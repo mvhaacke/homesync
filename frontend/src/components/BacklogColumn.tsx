@@ -15,6 +15,7 @@ interface Props {
   onTaskClick: (id: string) => void
   onTaskCreated: (task: Task) => void
   onTaskStateChanged: (taskId: string, state: string) => void
+  onTaskDone: (taskId: string) => void
 }
 
 export default function BacklogColumn({
@@ -29,6 +30,7 @@ export default function BacklogColumn({
   onTaskClick,
   onTaskCreated,
   onTaskStateChanged,
+  onTaskDone,
 }: Props) {
   const [isOver, setIsOver] = useState(false)
   const counter = useRef(0)
@@ -79,6 +81,7 @@ export default function BacklogColumn({
             onDragEnd={onDragEnd}
             onClick={onTaskClick}
             onStateChange={onTaskStateChanged}
+            onDone={onTaskDone}
           />
         ))}
       </div>
@@ -86,6 +89,7 @@ export default function BacklogColumn({
         householdId={householdId}
         dayWindow={null}
         weekStart={null}
+        members={members}
         onCreated={onTaskCreated}
       />
     </div>
