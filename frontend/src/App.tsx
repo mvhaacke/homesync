@@ -43,21 +43,12 @@ function AppContent() {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      const s = data.session
+    const { data: listener } = supabase.auth.onAuthStateChange((event, s) => {
       sessionRef.current = s
       setSession(s)
-      if (s) {
+      if (s && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
         bootstrap(s)
-      } else {
-        setAppState('loading')
-      }
-    })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => {
-      sessionRef.current = s
-      setSession(s)
-      if (!s) {
+      } else if (!s) {
         setAppState('loading')
         setHouseholdId(null)
       }
