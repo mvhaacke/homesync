@@ -6,6 +6,7 @@ import WeekNav from '../components/WeekNav'
 import DayColumn from '../components/DayColumn'
 import BacklogColumn from '../components/BacklogColumn'
 import TaskDetailPanel from '../components/TaskDetailPanel'
+import ShoppingListPanel from '../components/ShoppingListPanel'
 import { supabase } from '../lib/supabase'
 
 interface Props {
@@ -19,6 +20,7 @@ export default function WeeklyGrid({ householdId }: Props) {
   const [loading, setLoading] = useState(true)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
+  const [showShopping, setShowShopping] = useState(false)
 
   useEffect(() => {
     Promise.all([api.listTasks(householdId), api.getHousehold(householdId)])
@@ -37,6 +39,7 @@ export default function WeeklyGrid({ householdId }: Props) {
   const days = weekDays(weekMonday)
 
   function handleDrop(taskId: string, dayWindow: string | null) {
+    setDraggingTaskId(null)
     const original = tasks.find((t) => t.id === taskId)
     if (!original) return
     const patch = {
@@ -67,12 +70,21 @@ export default function WeeklyGrid({ householdId }: Props) {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, marginBottom: 4 }}>
         <h2 style={{ margin: 0, fontSize: 18 }}>HomeSync</h2>
-        <button
-          onClick={() => supabase.auth.signOut()}
-          style={{ fontSize: 12, padding: '4px 10px' }}
-        >
-          Sign out
-        </button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button
+            onClick={() => setShowShopping((s) => !s)}
+            style={{ fontSize: 12, padding: '4px 10px' }}
+            title="Shopping list"
+          >
+            🛒
+          </button>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            style={{ fontSize: 12, padding: '4px 10px' }}
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       <WeekNav
@@ -129,6 +141,14 @@ export default function WeeklyGrid({ householdId }: Props) {
           onTaskUpdated={(updated) => {
             setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
           }}
+        />
+      )}
+
+      {showShopping && (
+        <ShoppingListPanel
+          householdId={householdId}
+          weekStart={weekMonday}
+          onClose={() => setShowShopping(false)}
         />
       )}
     </div>

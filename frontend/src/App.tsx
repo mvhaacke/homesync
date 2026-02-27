@@ -1,31 +1,61 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
+import { api } from './lib/api'
 import SignIn from './pages/SignIn'
 import WeeklyGrid from './pages/WeeklyGrid'
+import ProfileSetup from './pages/ProfileSetup'
+import HouseholdSetup from './pages/HouseholdSetup'
 
-// Placeholder — replace with real household selection in Phase 2
-const DEMO_HOUSEHOLD_ID = import.meta.env.VITE_DEMO_HOUSEHOLD_ID as string | undefined
+type AppState = 'loading' | 'needs_profile' | 'needs_household' | 'ready'
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [appState, setAppState] = useState<AppState>('loading')
+  const [householdId, setHouseholdId] = useState<string | null>(null)
+  const sessionRef = useRef<Session | null>(null)
+
+  async function bootstrap(s: Session | null) {
+    if (!s) return
+    try {
+      await api.getMyProfile()
+    } catch {
+      setAppState('needs_profile')
+      return
+    }
+    const households = await api.getMyHouseholds()
+    if (households.length === 0) {
+      setAppState('needs_household')
+    } else {
+      setHouseholdId(households[0].household_id)
+      setAppState('ready')
+    }
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setLoading(false)
+      const s = data.session
+      sessionRef.current = s
+      setSession(s)
+      if (s) {
+        bootstrap(s)
+      } else {
+        setAppState('loading')
+      }
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => {
+      sessionRef.current = s
+      setSession(s)
+      if (!s) {
+        setAppState('loading')
+        setHouseholdId(null)
+      }
     })
 
     return () => listener.subscription.unsubscribe()
   }, [])
-
-  if (loading) return <p style={{ padding: 40 }}>Loading…</p>
 
   return (
     <BrowserRouter>
@@ -39,16 +69,14 @@ function App() {
           element={
             !session ? (
               <Navigate to="/signin" replace />
-            ) : DEMO_HOUSEHOLD_ID ? (
-              <WeeklyGrid householdId={DEMO_HOUSEHOLD_ID} />
+            ) : appState === 'loading' ? (
+              <p style={{ padding: 40 }}>Loading…</p>
+            ) : appState === 'needs_profile' ? (
+              <ProfileSetup onComplete={() => bootstrap(sessionRef.current)} />
+            ) : appState === 'needs_household' ? (
+              <HouseholdSetup onComplete={(id) => { setHouseholdId(id); setAppState('ready') }} />
             ) : (
-              <div style={{ padding: 40 }}>
-                <p>Signed in as {session.user.email}</p>
-                <p>
-                  Set <code>VITE_DEMO_HOUSEHOLD_ID</code> in your .env to see tasks.
-                </p>
-                <button onClick={() => supabase.auth.signOut()}>Sign out</button>
-              </div>
+              <WeeklyGrid householdId={householdId!} />
             )
           }
         />

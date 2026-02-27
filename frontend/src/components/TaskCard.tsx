@@ -58,6 +58,9 @@ export default function TaskCard({ task, members, isDragging, onDragStart, onDra
         >
           {task.state}
         </span>
+        {task.task_type === 'meal' && (
+          <span style={{ fontSize: 11 }} title="Meal">🍽</span>
+        )}
         <span
           style={{
             width: 10,
@@ -67,7 +70,7 @@ export default function TaskCard({ task, members, isDragging, onDragStart, onDra
             flexShrink: 0,
             marginLeft: 'auto',
           }}
-          title={member ? member.user_id : 'unassigned'}
+          title={member ? (member.display_name ?? member.user_id) : 'unassigned'}
         />
       </div>
     </div>

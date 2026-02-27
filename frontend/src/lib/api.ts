@@ -22,6 +22,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>
 }
 
+// ---- Profiles ----
+
+export interface Profile { id: string; display_name: string; color: string }
+export interface UserHousehold { household_id: string; household_name: string; role: string }
+
 // ---- Households ----
 
 export interface Household {
@@ -36,9 +41,17 @@ export interface HouseholdMember {
   user_id: string
   role: string
   color: string | null
+  display_name: string | null
 }
 
 export const api = {
+  getMyProfile: () => request<Profile>('/me/profile'),
+  upsertMyProfile: (display_name: string, color: string) =>
+    request<Profile>('/me/profile', { method: 'PUT', body: JSON.stringify({ display_name, color }) }),
+  getMyHouseholds: () => request<UserHousehold[]>('/me/households'),
+  joinHousehold: (householdId: string) =>
+    request<HouseholdMember>(`/households/${householdId}/join`, { method: 'POST' }),
+
   createHousehold: (name: string) =>
     request<Household>('/households', {
       method: 'POST',
@@ -71,6 +84,40 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(patch),
     }),
+
+  // ---- Shopping ----
+
+  getShoppingList: (householdId: string, weekStart: string) =>
+    request<ShoppingItem[]>(`/households/${householdId}/shopping-list?week_start=${weekStart}`),
+
+  syncShoppingList: (householdId: string, weekStart: string) =>
+    request<ShoppingItem[]>(`/households/${householdId}/shopping-list/sync?week_start=${weekStart}`, {
+      method: 'POST',
+    }),
+
+  toggleShoppingItem: (itemId: string, checked: boolean) =>
+    request<ShoppingItem>(`/shopping-list-items/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ checked }),
+    }),
+}
+
+export interface Ingredient {
+  name: string
+  quantity: number | null
+  unit: string | null
+  category: string
+}
+
+export interface ShoppingItem {
+  id: string
+  household_id: string
+  week_start: string
+  name: string
+  quantity: number | null
+  unit: string | null
+  category: string
+  checked: boolean
 }
 
 export interface Task {
@@ -88,6 +135,7 @@ export interface Task {
   week_start: string | null
   created_at: string
   updated_at: string
+  ingredients: Ingredient[]
 }
 
 export type CreateTaskPayload = Pick<Task, 'title'> &
@@ -101,5 +149,6 @@ export type CreateTaskPayload = Pick<Task, 'title'> &
       | 'time_of_day'
       | 'duration_minutes'
       | 'week_start'
+      | 'ingredients'
     >
   >

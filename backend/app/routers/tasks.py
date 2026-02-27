@@ -1,3 +1,4 @@
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -33,6 +34,7 @@ def create_task(household_id: UUID, body: TaskCreate, user: CurrentUser):
         payload["assigned_to"] = str(payload["assigned_to"])
     if "week_start" in payload:
         payload["week_start"] = payload["week_start"].isoformat()
+    payload["ingredients"] = json.dumps([i.model_dump() for i in body.ingredients])
 
     result = db.table("tasks").insert(payload).execute()
     return result.data[0]
@@ -48,6 +50,8 @@ def patch_task(task_id: UUID, body: TaskPatch, user: CurrentUser):
         payload["assigned_to"] = str(payload["assigned_to"])
     if "week_start" in payload and payload["week_start"] is not None:
         payload["week_start"] = payload["week_start"].isoformat()
+    if "ingredients" in payload:
+        payload["ingredients"] = json.dumps([i.model_dump() for i in (body.ingredients or [])])
 
     result = db.table("tasks").update(payload).eq("id", str(task_id)).execute()
     if not result.data:

@@ -34,15 +34,49 @@ def get_household(household_id: UUID, user: CurrentUser):
     if not result.data:
         raise HTTPException(status_code=404, detail="Household not found")
 
-    members = (
+    members_result = (
         db.table("household_members")
-        .select("*")
+        .select("household_id, user_id, role, color")
         .eq("household_id", str(household_id))
         .execute()
     )
+    member_ids = [m["user_id"] for m in members_result.data]
+    profiles: dict[str, dict] = {}
+    if member_ids:
+        pr = db.table("profiles").select("id, display_name, color").in_("id", member_ids).execute()
+        profiles = {p["id"]: p for p in pr.data}
+    enriched = [
+        {
+            **m,
+            "display_name": profiles.get(m["user_id"], {}).get("display_name"),
+            "color": (profiles.get(m["user_id"]) or {}).get("color") or m.get("color"),
+        }
+        for m in members_result.data
+    ]
     household = result.data[0]
-    household["members"] = members.data
+    household["members"] = enriched
     return household
+
+
+@router.post("/{household_id}/join", status_code=status.HTTP_201_CREATED)
+def join_household(household_id: UUID, user: CurrentUser):
+    db = get_supabase()
+    hh = db.table("households").select("id").eq("id", str(household_id)).execute()
+    if not hh.data:
+        raise HTTPException(status_code=404, detail="Household not found")
+    existing = (
+        db.table("household_members")
+        .select("*")
+        .eq("household_id", str(household_id))
+        .eq("user_id", str(user["sub"]))
+        .execute()
+    )
+    if existing.data:
+        return existing.data[0]
+    result = db.table("household_members").insert(
+        {"household_id": str(household_id), "user_id": str(user["sub"]), "role": "member"}
+    ).execute()
+    return result.data[0]
 
 
 @router.post("/{household_id}/members", status_code=status.HTTP_201_CREATED)

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import households, tasks
+from app.routers import households, profiles, shopping, tasks
 
 app = FastAPI(title="HomeSync API", version="0.1.0")
 
@@ -13,8 +13,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(profiles.router)
 app.include_router(households.router)
 app.include_router(tasks.router)
+app.include_router(shopping.router)
 
 
 @app.get("/health")

@@ -9,9 +9,12 @@ interface Props {
   onCreated: (task: Task) => void
 }
 
+const TYPE_OPTIONS = ['chore', 'meal', 'event', 'todo']
+
 export default function AddTaskForm({ householdId, dayWindow, weekStart, onCreated }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [title, setTitle] = useState('')
+  const [taskType, setTaskType] = useState('chore')
   const [submitting, setSubmitting] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -21,11 +24,13 @@ export default function AddTaskForm({ householdId, dayWindow, weekStart, onCreat
     try {
       const task = await api.createTask(householdId, {
         title: title.trim(),
+        task_type: taskType,
         day_window: dayWindow ?? undefined,
         week_start: weekStart ?? undefined,
       })
       onCreated(task)
       setTitle('')
+      setTaskType('chore')
       setExpanded(false)
     } finally {
       setSubmitting(false)
@@ -55,6 +60,25 @@ export default function AddTaskForm({ householdId, dayWindow, weekStart, onCreat
 
   return (
     <form onSubmit={handleSubmit} style={{ marginTop: 6 }}>
+      <select
+        value={taskType}
+        onChange={(e) => setTaskType(e.target.value)}
+        style={{
+          width: '100%',
+          boxSizing: 'border-box',
+          fontSize: 12,
+          padding: '4px 6px',
+          borderRadius: 4,
+          border: '1px solid rgba(255,255,255,0.25)',
+          background: '#1e1e2e',
+          color: 'inherit',
+          marginBottom: 4,
+        }}
+      >
+        {TYPE_OPTIONS.map((t) => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select>
       <input
         autoFocus
         value={title}

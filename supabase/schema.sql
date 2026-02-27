@@ -92,3 +92,21 @@ CREATE POLICY "tasks_update_for_members" ON tasks
       SELECT household_id FROM household_members WHERE user_id = auth.uid()
     )
   );
+
+-- Phase 3: profiles table
+CREATE TABLE profiles (
+  id           UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  display_name TEXT NOT NULL,
+  color        TEXT NOT NULL
+);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "profiles_select" ON profiles
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "profiles_insert_own" ON profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "profiles_update_own" ON profiles
+  FOR UPDATE USING (auth.uid() = id);
