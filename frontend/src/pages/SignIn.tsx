@@ -20,7 +20,7 @@ export default function SignIn() {
       if (mode === 'signup') {
         const { error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
-        setMessage('Check your email to confirm your account.')
+        setMessage('Check your email for a confirmation link. Once confirmed, you\'ll be taken straight into the household.')
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
