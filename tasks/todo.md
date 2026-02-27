@@ -1,40 +1,51 @@
 # HomeSync — Task Board
 
-## Phase 1: Foundation
-- [ ] Init FastAPI project structure
-- [ ] Create Supabase project (Postgres + Auth)
-- [ ] Init React + TypeScript frontend
-- [ ] Wire frontend ↔ backend (CORS, env vars)
-- [ ] Define data model in SQL + Pydantic schemas
-- [ ] Implement Supabase auth (sign up / sign in)
-- [ ] First API routes: `POST /tasks`, `GET /household/{id}/tasks`
+## Done
 
-## Phase 2: Weekly Planning Loop
-- [ ] Availability input (fixed blocks per person per week)
-- [ ] Proposal board (list view + state transitions)
-- [ ] Task states: proposed → accepted | counter_proposed | declined
-- [ ] Weekly grid view (day-level, no time slots yet)
-- [ ] Color-coded by person, free time visible
+### Phase 1: Foundation
+- [x] Supabase project (Postgres + Auth)
+- [x] React + TypeScript + Vite frontend
+- [x] Supabase auth (sign up / sign in)
+- [x] Data model: households, household_members, tasks, profiles
+- [x] Profile setup (display name + color)
+- [x] Household create / join flow
 
-## Phase 3: Recommendation Engine
-- [ ] Calculate total assigned minutes per person
-- [ ] Detect overload / scheduling conflicts
-- [ ] Suggest re-balancing moves
-- [ ] Minimum free-time buffer check
+### Phase 2: Weekly Planning Loop
+- [x] Weekly calendar grid (day columns, floating tasks panel)
+- [x] Drag tasks to days
+- [x] Task states: proposed → accepted | counter_proposed | declined
+- [x] Color-coded by assigned member
+- [x] Task types: chore, meal, event, todo
 
-## Phase 4: Meals + Shopping
-- [ ] Meal metadata (duration, cook, cleanup, ingredients)
-- [ ] Ingredient aggregation from accepted meals
-- [ ] Deduplicated shopping list
-- [ ] Shopping trip as a task linked to meals
+### Phase 3: Meals + Shopping
+- [x] Meal tasks with ingredients (name, quantity, unit, category)
+- [x] Shopping list panel with week selector
+- [x] Sync: aggregates ingredients from accepted meals, deduplicates by name+unit
+- [x] Check off shopping items (persisted)
 
-## Phase 5: Polish
-- [ ] Drag to time slots
-- [ ] Mobile layout
-- [ ] Notifications / reminders
-- [ ] Floating to-do list (non-scheduled tasks)
+### Phase 4: Zero-Python Migration
+- [x] Replaced FastAPI backend with direct Supabase JS client calls
+- [x] Shopping sync logic ported to Deno Edge Function
+- [x] Fixed RLS infinite recursion on household_members (SECURITY DEFINER function)
+- [x] Vercel deploy config (SPA rewrite)
 
 ---
 
-## Review
-_Added after completion of each phase._
+## Up Next
+
+### LLM: Ingredient suggestions
+When a meal task is named, call a Claude Edge Function to suggest a default ingredient list. User can edit before saving.
+
+### Household invites
+Edge Function using `supabase.auth.admin.inviteUserByEmail()` so users can invite by email instead of sharing a raw UUID.
+
+### LLM: Time/day suggestions
+Single-turn prompt suggesting which day to schedule a task based on household patterns.
+
+### Password reset page
+Catch the Supabase magic link at `/reset-password` and let the user set a new password.
+
+### Polish
+- Mobile layout
+- Floating to-do list (tasks with no day assigned)
+- Drag to time slots within a day

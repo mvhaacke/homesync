@@ -52,10 +52,26 @@ ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE households ENABLE ROW LEVEL SECURITY;
 ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies (basic — tighten in Phase 2)
--- household_members: users can see their own memberships
-CREATE POLICY "members_see_own" ON household_members
-  FOR SELECT USING (auth.uid() = user_id);
+-- Helper: returns household IDs for the current user (SECURITY DEFINER breaks RLS recursion)
+CREATE OR REPLACE FUNCTION get_my_household_ids()
+RETURNS SETOF UUID AS $$
+  SELECT household_id FROM household_members WHERE user_id = auth.uid()
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- RLS Policies
+-- household_members: users can see all members of households they belong to
+CREATE POLICY "members_see_household" ON household_members
+  FOR SELECT USING (
+    household_id IN (SELECT get_my_household_ids())
+  );
+
+CREATE POLICY "members_delete_admin" ON household_members
+  FOR DELETE USING (
+    household_id IN (
+      SELECT household_id FROM household_members
+      WHERE user_id = auth.uid() AND role = 'admin'
+    )
+  );
 
 CREATE POLICY "members_insert_own" ON household_members
   FOR INSERT WITH CHECK (auth.uid() = user_id);
