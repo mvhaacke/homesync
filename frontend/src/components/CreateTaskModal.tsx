@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
-import type { HouseholdMember, Task } from '../lib/api'
+import type { HouseholdMember, Ingredient, MealTemplate, Task } from '../lib/api'
 
 const TYPE_OPTIONS = ['chore', 'meal', 'event', 'todo']
 const RECURRENCE_OPTIONS = [
@@ -36,11 +36,35 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  // Meal library
+  const [templates, setTemplates] = useState<MealTemplate[]>([])
+  const [mealSearch, setMealSearch] = useState('')
+  const [selectedIngredients, setSelectedIngredients] = useState<Ingredient[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (taskType === 'meal') {
+      api.getMealTemplates(householdId).then(setTemplates)
+    }
+  }, [taskType])
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  const filteredTemplates = templates.filter((t) =>
+    t.name.toLowerCase().includes(mealSearch.toLowerCase())
+  )
+
+  function selectTemplate(template: MealTemplate) {
+    setTitle(template.name)
+    setSelectedIngredients(template.ingredients)
+    setMealSearch(template.name)
+    setShowDropdown(false)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -55,6 +79,7 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
         description: notes.trim() || undefined,
         day_window: dayWindow ?? undefined,
         week_start: weekStart ?? undefined,
+        ingredients: selectedIngredients.length > 0 ? selectedIngredients : undefined,
       })
       onCreated(task)
       onClose()
@@ -65,13 +90,11 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
 
   return (
     <>
-      {/* Backdrop */}
       <div
         onClick={onClose}
         style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.5)' }}
       />
 
-      {/* Modal */}
       <div
         style={{
           position: 'fixed',
@@ -86,6 +109,8 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
           display: 'flex',
           flexDirection: 'column',
           gap: 18,
+          maxHeight: '90vh',
+          overflowY: 'auto',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -94,22 +119,11 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <label style={fieldStyle}>
-            <span style={labelStyle}>TITLE</span>
-            <input
-              required
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="What needs doing?"
-              style={inputStyle}
-            />
-          </label>
 
           <div style={{ display: 'flex', gap: 12 }}>
             <label style={{ ...fieldStyle, flex: 1 }}>
               <span style={labelStyle}>TYPE</span>
-              <select value={taskType} onChange={(e) => setTaskType(e.target.value)} style={selectStyle}>
+              <select value={taskType} onChange={(e) => { setTaskType(e.target.value); setSelectedIngredients([]); setMealSearch('') }} style={selectStyle}>
                 {TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>
@@ -121,6 +135,67 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
               </select>
             </label>
           </div>
+
+          {/* Meal library picker */}
+          {taskType === 'meal' && templates.length > 0 && (
+            <div style={{ ...fieldStyle, position: 'relative' }}>
+              <span style={labelStyle}>MEAL LIBRARY</span>
+              <input
+                ref={searchRef}
+                value={mealSearch}
+                onChange={(e) => { setMealSearch(e.target.value); setShowDropdown(true); setSelectedIngredients([]) }}
+                onFocus={() => setShowDropdown(true)}
+                placeholder="Search saved meals…"
+                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+              />
+              {showDropdown && filteredTemplates.length > 0 && (
+                <div
+                  style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+                    background: '#1e1e2e', border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: 6, marginTop: 2, maxHeight: 180, overflowY: 'auto',
+                  }}
+                >
+                  {filteredTemplates.map((t) => (
+                    <div
+                      key={t.id}
+                      onMouseDown={() => selectTemplate(t)}
+                      style={{
+                        padding: '8px 12px', cursor: 'pointer', fontSize: 13,
+                        borderBottom: '1px solid rgba(255,255,255,0.06)',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <div>{t.name}</div>
+                      {t.ingredients.length > 0 && (
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>
+                          {t.ingredients.map((i) => i.name).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedIngredients.length > 0 && (
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
+                  {selectedIngredients.length} ingredient{selectedIngredients.length !== 1 ? 's' : ''} loaded
+                </div>
+              )}
+            </div>
+          )}
+
+          <label style={fieldStyle}>
+            <span style={labelStyle}>TITLE</span>
+            <input
+              required
+              autoFocus={taskType !== 'meal'}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="What needs doing?"
+              style={inputStyle}
+            />
+          </label>
 
           <label style={fieldStyle}>
             <span style={labelStyle}>ASSIGN TO</span>

@@ -31,12 +31,9 @@ export default function ShoppingListPanel({ householdId, weekStart, onClose }: P
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
-    api.getShoppingList(householdId, weekStart).then((data) => {
-      if (data.length === 0) {
-        return api.syncShoppingList(householdId, weekStart).then(setItems)
-      }
-      setItems(data)
-    }).finally(() => setLoading(false))
+    api.getShoppingList(householdId, weekStart)
+      .then(setItems)
+      .finally(() => setLoading(false))
   }, [householdId, weekStart])
 
   async function handleSync() {

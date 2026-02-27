@@ -79,7 +79,11 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
     setIngredients(next)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      patch({ ingredients: next })
+      const toSave = next.filter((ing) => ing.name.trim() !== '')
+      patch({ ingredients: toSave })
+      if (task.task_type === 'meal' && toSave.length > 0) {
+        api.upsertMealTemplate(task.household_id, task.title, toSave)
+      }
     }, 600)
   }
 

@@ -57,6 +57,13 @@ export interface Task {
   ingredients: Ingredient[]
 }
 
+export interface MealTemplate {
+  id: string
+  household_id: string
+  name: string
+  ingredients: Ingredient[]
+}
+
 export interface HouseholdInvite {
   id: string
   household_id: string
@@ -236,25 +243,95 @@ export const api = {
   },
 
   syncShoppingList: async (householdId: string, weekStart: string): Promise<ShoppingItem[]> => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-shopping-list`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session!.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ household_id: householdId, week_start: weekStart }),
-      },
-    )
-    if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
-    return res.json() as Promise<ShoppingItem[]>
+    // 1. Fetch accepted meal tasks with ingredients
+    const { data: tasks, error: tasksErr } = await supabase
+      .from('tasks')
+      .select('ingredients')
+      .eq('household_id', householdId)
+      .eq('week_start', weekStart)
+      .eq('task_type', 'meal')
+      .eq('state', 'accepted')
+    if (tasksErr) throw new Error(tasksErr.message)
+
+    // 2. Aggregate ingredients by (name.lower(), unit)
+    const aggregated = new Map<string, { name: string; quantity: number | null; unit: string | null; category: string }>()
+    for (const task of tasks ?? []) {
+      const ingredients: Array<{ name: string; quantity?: number | null; unit?: string | null; category?: string }> =
+        task.ingredients ?? []
+      for (const ing of ingredients) {
+        const key = `${ing.name.toLowerCase()}||${ing.unit ?? ''}`
+        const existing = aggregated.get(key)
+        if (existing) {
+          if (existing.quantity != null && ing.quantity != null) {
+            existing.quantity += ing.quantity
+          } else if (ing.quantity != null) {
+            existing.quantity = ing.quantity
+          }
+        } else {
+          aggregated.set(key, {
+            name: ing.name,
+            quantity: ing.quantity ?? null,
+            unit: ing.unit ?? null,
+            category: ing.category ?? 'other',
+          })
+        }
+      }
+    }
+
+    // 3. Preserve checked item names
+    const { data: checkedItems } = await supabase
+      .from('shopping_list_items')
+      .select('name')
+      .eq('household_id', householdId)
+      .eq('week_start', weekStart)
+      .eq('checked', true)
+    const checkedNames = new Set((checkedItems ?? []).map((r: { name: string }) => r.name.toLowerCase()))
+
+    // 4. Delete unchecked items
+    await supabase
+      .from('shopping_list_items')
+      .delete()
+      .eq('household_id', householdId)
+      .eq('week_start', weekStart)
+      .eq('checked', false)
+
+    // 5. Insert new items (skip already-checked names)
+    const newItems = Array.from(aggregated.values())
+      .filter(item => item.name.trim() !== '' && !checkedNames.has(item.name.toLowerCase()))
+      .map(item => ({ household_id: householdId, week_start: weekStart, ...item, checked: false }))
+    if (newItems.length > 0) {
+      await supabase.from('shopping_list_items').insert(newItems)
+    }
+
+    // 6. Return all items
+    const { data: allItems, error: listErr } = await supabase
+      .from('shopping_list_items')
+      .select('*')
+      .eq('household_id', householdId)
+      .eq('week_start', weekStart)
+    if (listErr) throw new Error(listErr.message)
+    return (allItems ?? []) as ShoppingItem[]
   },
 
   deleteTask: async (taskId: string): Promise<void> => {
     const { error } = await supabase.from('tasks').delete().eq('id', taskId)
     if (error) throw new Error(error.message)
+  },
+
+  getMealTemplates: async (householdId: string): Promise<MealTemplate[]> => {
+    const { data, error } = await supabase
+      .from('meal_templates')
+      .select('*')
+      .eq('household_id', householdId)
+      .order('name')
+    if (error) throw new Error(error.message)
+    return (data ?? []) as MealTemplate[]
+  },
+
+  upsertMealTemplate: async (householdId: string, name: string, ingredients: Ingredient[]): Promise<void> => {
+    await supabase
+      .from('meal_templates')
+      .upsert({ household_id: householdId, name, ingredients }, { onConflict: 'household_id,name' })
   },
 
   createInvite: async (householdId: string): Promise<HouseholdInvite> => {

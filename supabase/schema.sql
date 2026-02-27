@@ -130,6 +130,28 @@ CREATE POLICY "profiles_insert_own" ON profiles
 CREATE POLICY "profiles_update_own" ON profiles
   FOR UPDATE USING (auth.uid() = id);
 
+-- Meal template library
+CREATE TABLE meal_templates (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  ingredients  JSONB NOT NULL DEFAULT '[]',
+  created_by   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(household_id, name)
+);
+
+ALTER TABLE meal_templates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "meal_templates_select" ON meal_templates
+  FOR SELECT USING (household_id IN (SELECT get_my_household_ids()));
+
+CREATE POLICY "meal_templates_insert" ON meal_templates
+  FOR INSERT WITH CHECK (household_id IN (SELECT get_my_household_ids()));
+
+CREATE POLICY "meal_templates_update" ON meal_templates
+  FOR UPDATE USING (household_id IN (SELECT get_my_household_ids()));
+
 -- Phase 5: household_invites table
 CREATE TABLE household_invites (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
