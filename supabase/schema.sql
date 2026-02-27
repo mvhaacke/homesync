@@ -24,8 +24,8 @@ CREATE TABLE tasks (
   description      TEXT,
   task_type        TEXT NOT NULL DEFAULT 'chore',    -- 'chore'|'meal'|'event'|'todo'
   state            TEXT NOT NULL DEFAULT 'proposed', -- 'proposed'|'accepted'|'counter_proposed'|'declined'
-  proposed_by      UUID REFERENCES auth.users(id),
-  assigned_to      UUID REFERENCES auth.users(id),
+  proposed_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  assigned_to      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   day_window       TEXT,     -- 'monday'..'sunday' | null = floating
   time_of_day      TEXT,     -- 'morning'|'afternoon'|'evening' | null
   duration_minutes INTEGER,
@@ -134,7 +134,7 @@ CREATE POLICY "profiles_update_own" ON profiles
 CREATE TABLE household_invites (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   household_id UUID REFERENCES households(id) ON DELETE CASCADE,
-  created_by   UUID REFERENCES auth.users(id),
+  created_by   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   token        UUID DEFAULT gen_random_uuid() UNIQUE NOT NULL,
   expires_at   TIMESTAMPTZ DEFAULT now() + interval '7 days',
   used_at      TIMESTAMPTZ
