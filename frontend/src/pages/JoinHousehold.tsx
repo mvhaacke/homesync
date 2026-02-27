@@ -21,7 +21,12 @@ export default function JoinHousehold() {
         await api.redeemInvite(token!)
         navigate('/')
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to redeem invite')
+        const msg = err instanceof Error ? err.message : 'Failed to redeem invite'
+        if (msg === 'already_member') {
+          navigate('/')
+          return
+        }
+        setError(msg)
         setLoading(false)
       }
     }

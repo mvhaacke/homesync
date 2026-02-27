@@ -279,7 +279,10 @@ export const api = {
     const { error: memberErr } = await supabase
       .from('household_members')
       .insert({ household_id: invite.household_id, user_id: userId, role: 'member' })
-    if (memberErr) throw new Error(memberErr.message)
+    if (memberErr) {
+      if (memberErr.code === '23505') throw new Error('already_member')
+      throw new Error(memberErr.message)
+    }
     await supabase
       .from('household_invites')
       .update({ used_at: new Date().toISOString() })
