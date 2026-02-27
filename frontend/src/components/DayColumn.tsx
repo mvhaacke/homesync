@@ -10,12 +10,14 @@ interface Props {
   householdId: string
   tasks: Task[]
   members: HouseholdMember[]
+  currentUserId: string
   draggingTaskId: string | null
   onDragStart: (id: string) => void
   onDragEnd: () => void
   onDrop: (taskId: string, day: string) => void
   onTaskClick: (id: string) => void
   onTaskCreated: (task: Task) => void
+  onTaskStateChanged: (taskId: string, state: string) => void
 }
 
 export default function DayColumn({
@@ -24,12 +26,14 @@ export default function DayColumn({
   householdId,
   tasks,
   members,
+  currentUserId,
   draggingTaskId,
   onDragStart,
   onDragEnd,
   onDrop,
   onTaskClick,
   onTaskCreated,
+  onTaskStateChanged,
 }: Props) {
   const [isOver, setIsOver] = useState(false)
   const counter = useRef(0)
@@ -74,10 +78,12 @@ export default function DayColumn({
             key={task.id}
             task={task}
             members={members}
+            currentUserId={currentUserId}
             isDragging={task.id === draggingTaskId}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             onClick={onTaskClick}
+            onStateChange={onTaskStateChanged}
           />
         ))}
       </div>

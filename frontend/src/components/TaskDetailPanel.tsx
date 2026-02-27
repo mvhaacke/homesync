@@ -6,11 +6,18 @@ import IngredientEditor from './IngredientEditor'
 interface Props {
   task: Task
   members: HouseholdMember[]
+  currentUserId: string
   onClose: () => void
   onTaskUpdated: (task: Task) => void
+  onTaskDeleted: (taskId: string) => void
 }
 
-const STATE_OPTIONS = ['proposed', 'accepted', 'counter_proposed', 'declined']
+const STATE_COLORS: Record<string, string> = {
+  proposed: '#3b82f6',
+  accepted: '#22a95e',
+  declined: '#ef4444',
+}
+
 const TYPE_OPTIONS = ['chore', 'meal', 'event', 'todo']
 
 const fieldStyle: React.CSSProperties = {
@@ -39,15 +46,18 @@ const selectStyle: React.CSSProperties = {
   background: '#1e1e2e',
 }
 
-export default function TaskDetailPanel({ task, members, onClose, onTaskUpdated }: Props) {
+export default function TaskDetailPanel({ task, members, currentUserId, onClose, onTaskUpdated, onTaskDeleted }: Props) {
   const [title, setTitle] = useState(task.title)
   const [ingredients, setIngredients] = useState<Ingredient[]>(task.ingredients ?? [])
+  const [deleting, setDeleting] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Sync ingredients state when task changes (e.g. panel reopened with different task)
   useEffect(() => {
+    setTitle(task.title)
     setIngredients(task.ingredients ?? [])
   }, [task.id])
+
+  const isProposer = task.proposed_by === currentUserId
 
   async function patch(fields: Partial<Task>) {
     const updated = await api.patchTask(task.id, fields)
@@ -62,25 +72,24 @@ export default function TaskDetailPanel({ task, members, onClose, onTaskUpdated 
     }, 600)
   }
 
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await api.deleteTask(task.id)
+      onTaskDeleted(task.id)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 99,
-        }}
-      />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
 
-      {/* Panel */}
       <div
         style={{
           position: 'fixed',
-          top: 0,
-          right: 0,
-          bottom: 0,
+          top: 0, right: 0, bottom: 0,
           width: 360,
           zIndex: 100,
           background: '#1e1e2e',
@@ -97,13 +106,55 @@ export default function TaskDetailPanel({ task, members, onClose, onTaskUpdated 
           <button onClick={onClose} style={{ padding: '2px 8px', fontSize: 16 }}>✕</button>
         </div>
 
+        {/* State badge */}
+        <div style={fieldStyle}>
+          <span style={labelStyle}>STATE</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span
+              style={{
+                fontSize: 11,
+                padding: '3px 8px',
+                borderRadius: 10,
+                background: STATE_COLORS[task.state] ?? '#888',
+                color: '#fff',
+                fontWeight: 600,
+                letterSpacing: 0.3,
+              }}
+            >
+              {task.state}
+            </span>
+            {task.state === 'declined' && isProposer && (
+              <button
+                onClick={() => patch({ state: 'proposed' })}
+                style={{
+                  fontSize: 12,
+                  padding: '3px 10px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(59,130,246,0.4)',
+                  background: 'rgba(59,130,246,0.15)',
+                  color: '#93c5fd',
+                  cursor: 'pointer',
+                }}
+              >
+                Re-propose
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Title */}
         <label style={fieldStyle}>
           <span style={labelStyle}>TITLE</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => { if (title.trim() && title !== task.title) patch({ title: title.trim() }) }}
+            onBlur={() => {
+              if (title.trim() && title !== task.title) {
+                const fields: Partial<Task> = { title: title.trim() }
+                if (task.state === 'declined') fields.state = 'proposed'
+                patch(fields)
+              }
+            }}
             style={controlStyle}
           />
         </label>
@@ -122,20 +173,6 @@ export default function TaskDetailPanel({ task, members, onClose, onTaskUpdated 
           </select>
         </label>
 
-        {/* State */}
-        <label style={fieldStyle}>
-          <span style={labelStyle}>STATE</span>
-          <select
-            value={task.state}
-            onChange={(e) => patch({ state: e.target.value })}
-            style={selectStyle}
-          >
-            {STATE_OPTIONS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </label>
-
         {/* Assigned to */}
         <label style={fieldStyle}>
           <span style={labelStyle}>ASSIGNED TO</span>
@@ -143,11 +180,8 @@ export default function TaskDetailPanel({ task, members, onClose, onTaskUpdated 
             {task.assigned_to && (
               <span
                 style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
+                  width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
                   background: members.find((m) => m.user_id === task.assigned_to)?.color ?? '#888',
-                  flexShrink: 0,
                 }}
               />
             )}
@@ -174,7 +208,29 @@ export default function TaskDetailPanel({ task, members, onClose, onTaskUpdated 
           </div>
         )}
 
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 'auto' }}>
+        {/* Footer: delete */}
+        {isProposer && (
+          <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              style={{
+                fontSize: 12,
+                padding: '5px 12px',
+                borderRadius: 6,
+                border: '1px solid rgba(239,68,68,0.4)',
+                background: 'rgba(239,68,68,0.1)',
+                color: '#f87171',
+                cursor: deleting ? 'not-allowed' : 'pointer',
+                opacity: deleting ? 0.6 : 1,
+              }}
+            >
+              {deleting ? 'Deleting…' : 'Delete task'}
+            </button>
+          </div>
+        )}
+
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
           ID: {task.id.slice(0, 8)}…
         </div>
       </div>

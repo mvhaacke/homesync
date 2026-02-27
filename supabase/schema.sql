@@ -109,6 +109,9 @@ CREATE POLICY "tasks_update_for_members" ON tasks
     )
   );
 
+CREATE POLICY "tasks_delete_proposed_by" ON tasks
+  FOR DELETE USING (proposed_by = auth.uid());
+
 -- Phase 3: profiles table
 CREATE TABLE profiles (
   id           UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -126,3 +129,24 @@ CREATE POLICY "profiles_insert_own" ON profiles
 
 CREATE POLICY "profiles_update_own" ON profiles
   FOR UPDATE USING (auth.uid() = id);
+
+-- Phase 5: household_invites table
+CREATE TABLE household_invites (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID REFERENCES households(id) ON DELETE CASCADE,
+  created_by   UUID REFERENCES auth.users(id),
+  token        UUID DEFAULT gen_random_uuid() UNIQUE NOT NULL,
+  expires_at   TIMESTAMPTZ DEFAULT now() + interval '7 days',
+  used_at      TIMESTAMPTZ
+);
+
+ALTER TABLE household_invites ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "invites_insert_members" ON household_invites
+  FOR INSERT WITH CHECK (household_id IN (SELECT get_my_household_ids()));
+
+CREATE POLICY "invites_select_auth" ON household_invites
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "invites_delete_members" ON household_invites
+  FOR DELETE USING (household_id IN (SELECT get_my_household_ids()));

@@ -56,6 +56,15 @@ export interface Task {
   ingredients: Ingredient[]
 }
 
+export interface HouseholdInvite {
+  id: string
+  household_id: string
+  created_by: string
+  token: string
+  expires_at: string
+  used_at: string | null
+}
+
 export type CreateTaskPayload = Pick<Task, 'title'> &
   Partial<
     Pick<
@@ -239,6 +248,42 @@ export const api = {
     )
     if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
     return res.json() as Promise<ShoppingItem[]>
+  },
+
+  deleteTask: async (taskId: string): Promise<void> => {
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+    if (error) throw new Error(error.message)
+  },
+
+  createInvite: async (householdId: string): Promise<HouseholdInvite> => {
+    const userId = await getUserId()
+    const { data, error } = await supabase
+      .from('household_invites')
+      .insert({ household_id: householdId, created_by: userId })
+      .select()
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Create invite failed')
+    return data as HouseholdInvite
+  },
+
+  redeemInvite: async (token: string): Promise<void> => {
+    const userId = await getUserId()
+    const { data: invite, error } = await supabase
+      .from('household_invites')
+      .select('*')
+      .eq('token', token)
+      .single()
+    if (error || !invite) throw new Error('Invite not found')
+    if (invite.used_at !== null) throw new Error('This invite has already been used')
+    if (new Date(invite.expires_at) <= new Date()) throw new Error('This invite has expired')
+    const { error: memberErr } = await supabase
+      .from('household_members')
+      .insert({ household_id: invite.household_id, user_id: userId, role: 'member' })
+    if (memberErr) throw new Error(memberErr.message)
+    await supabase
+      .from('household_invites')
+      .update({ used_at: new Date().toISOString() })
+      .eq('id', invite.id)
   },
 
   toggleShoppingItem: async (itemId: string, checked: boolean): Promise<ShoppingItem> => {
