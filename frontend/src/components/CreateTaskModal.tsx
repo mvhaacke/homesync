@@ -97,7 +97,7 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
       }
 
       if (canRecur && recurrence && weekStart) {
-        const tasks = await api.createRecurringSeries(householdId, { ...base, recurrence, week_start: weekStart })
+        const tasks = await api.createRecurringSeries(householdId, { ...base, recurrence: recurrence as Task['recurrence'] & string, week_start: weekStart })
         onCreated(tasks[0])
       } else {
         const task = await api.createTask(householdId, { ...base, week_start: weekStart ?? undefined })
