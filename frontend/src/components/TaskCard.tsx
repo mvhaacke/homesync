@@ -8,6 +8,17 @@ const STATE_COLORS: Record<string, string> = {
   done: '#6b7280',
 }
 
+const TYPE_COLORS: Record<string, string> = {
+  chore: '#f59e0b',
+  meal: '#22c55e',
+  event: '#3b82f6',
+  todo: '#94a3b8',
+}
+
+function formatTime(t: string): string {
+  return t.slice(0, 5) // "HH:MM:SS" → "HH:MM"
+}
+
 interface Props {
   task: Task
   members: HouseholdMember[]
@@ -27,15 +38,16 @@ export default function TaskCard({
   const member = members.find((m) => m.user_id === task.assigned_to)
   const dotColor = member?.color ?? '#888'
   const isDone = task.state === 'done'
-  const showAcceptDecline = task.state === 'proposed' && task.proposed_by !== currentUserId
-  const showBadge = isDone || task.state === 'accepted' || task.state === 'declined'
+  const isChore = task.task_type === 'chore'
+  const showAcceptDecline = isChore && task.state === 'proposed' && task.proposed_by !== currentUserId
+  const showBadge = isDone || task.state === 'declined' || (isChore && task.state === 'accepted') || (isChore && task.state === 'proposed' && task.proposed_by === currentUserId)
 
   return (
     <div
       draggable
       onDragStart={(e) => { e.dataTransfer.setData('taskId', task.id); onDragStart(task.id) }}
       onDragEnd={onDragEnd}
-      onClick={() => onClick(task.id)}
+      onClick={(e) => { e.stopPropagation(); onClick(task.id) }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -43,9 +55,8 @@ export default function TaskCard({
         padding: '8px 10px',
         marginBottom: 6,
         borderRadius: 6,
-        border: task.state === 'proposed'
-          ? '1px solid rgba(59,130,246,0.4)'
-          : '1px solid rgba(255,255,255,0.12)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        borderLeft: `3px solid ${showAcceptDecline ? 'rgba(59,130,246,0.7)' : (TYPE_COLORS[task.task_type] ?? '#888')}`,
         background: 'rgba(255,255,255,0.05)',
         cursor: isDone ? 'default' : 'grab',
         opacity: isDragging ? 0.4 : isDone ? 0.45 : 1,
@@ -66,6 +77,20 @@ export default function TaskCard({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >✓</button>
+      )}
+
+      {/* GCal-style time line */}
+      {task.start_time && (
+        <div style={{
+          fontSize: 10,
+          fontWeight: 600,
+          color: 'rgba(255,255,255,0.5)',
+          marginBottom: 3,
+          letterSpacing: 0.3,
+        }}>
+          {formatTime(task.start_time)}
+          {task.end_time ? ` – ${formatTime(task.end_time)}` : ''}
+        </div>
       )}
 
       {/* Title */}
@@ -90,6 +115,11 @@ export default function TaskCard({
             color: '#fff', fontWeight: 600, letterSpacing: 0.3,
           }}>
             {task.state}
+          </span>
+        )}
+        {!task.start_time && task.duration_minutes && (
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>
+            {task.duration_minutes}m
           </span>
         )}
         {task.task_type === 'meal' && <span style={{ fontSize: 11 }} title="Meal">🍽</span>}

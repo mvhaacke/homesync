@@ -33,6 +33,43 @@
 
 ## Up Next
 
+### ~~Batch 1 — Core UX overhaul~~ ✅ Done
+
+- [x] Simplified task state: chores only (meals/events/todos auto-accepted on creation)
+- [x] Times on all task types (time_of_day + duration_minutes in creation modal, detail panel, task cards)
+- [x] Google Calendar-style task creation (click any day/backlog column to open modal; Add buttons removed)
+- [x] "Today" button in week nav
+
+**DB migration to run in Supabase SQL editor:**
+```sql
+UPDATE tasks SET state = 'accepted'
+WHERE task_type IN ('meal', 'event', 'todo') AND state = 'proposed';
+```
+
+---
+
+### ~~Batch 2 — Recurring tasks~~ ✅ Done
+
+- [x] Chores, events, todos can recur (weekly / biweekly / monthly); meals cannot
+- [x] `recurrence_series_id` UUID links all instances; 12 instances generated on creation
+- [x] Current/future instance edits propagate forward through series; past edits are isolated
+- [x] Delete on current/future instance ends series there; past instances remain
+- [x] Recurrence hidden in backlog (no week_start)
+
+**DB migration to run in Supabase SQL editor:**
+```sql
+ALTER TABLE tasks ADD COLUMN recurrence_series_id UUID;
+CREATE INDEX idx_tasks_series ON tasks(recurrence_series_id) WHERE recurrence_series_id IS NOT NULL;
+```
+
+---
+
+### Batch 3 — Mobile layout
+
+Responsive layout for the weekly grid and panels — collapse to single-column, touch-friendly task cards.
+
+---
+
 ### LLM: Ingredient suggestions
 When a meal task is named, call a Claude Edge Function to suggest a default ingredient list. User can edit before saving.
 

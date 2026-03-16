@@ -2,11 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import type { Ingredient, Task, HouseholdMember } from '../lib/api'
 import IngredientEditor from './IngredientEditor'
+import { currentWeekMonday } from '../lib/weekUtils'
+
+const TIME_OPTIONS: string[] = []
+for (let h = 0; h < 24; h++) {
+  for (let m = 0; m < 60; m += 15) {
+    TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+  }
+}
 
 interface Props {
   task: Task
   members: HouseholdMember[]
   currentUserId: string
+  isMobile?: boolean
   onClose: () => void
   onTaskUpdated: (task: Task) => void
   onTaskDeleted: (taskId: string) => void
@@ -46,7 +55,7 @@ const selectStyle: React.CSSProperties = {
   background: '#1e1e2e',
 }
 
-export default function TaskDetailPanel({ task, members, currentUserId, onClose, onTaskUpdated, onTaskDeleted }: Props) {
+export default function TaskDetailPanel({ task, members, currentUserId, isMobile, onClose, onTaskUpdated, onTaskDeleted }: Props) {
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description ?? '')
   const [ingredients, setIngredients] = useState<Ingredient[]>(task.ingredients ?? [])
@@ -61,10 +70,20 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
   }, [task.id])
 
   const isProposer = task.proposed_by === currentUserId
+  const isRecurringFuture = !!(
+    task.recurrence_series_id &&
+    task.week_start &&
+    task.week_start >= currentWeekMonday()
+  )
 
   async function patch(fields: Partial<Task>) {
-    const updated = await api.patchTask(task.id, fields)
-    onTaskUpdated(updated)
+    if (isRecurringFuture && task.recurrence_series_id && task.week_start) {
+      await api.patchSeriesFromDate(task.recurrence_series_id, task.week_start, fields)
+      onTaskUpdated({ ...task, ...fields })
+    } else {
+      const updated = await api.patchTask(task.id, fields)
+      onTaskUpdated(updated)
+    }
   }
 
   function handleDescriptionChange(value: string) {
@@ -90,7 +109,11 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
   async function handleDelete() {
     setDeleting(true)
     try {
-      await api.deleteTask(task.id)
+      if (isRecurringFuture && task.recurrence_series_id && task.week_start) {
+        await api.deleteSeriesFromDate(task.recurrence_series_id, task.week_start)
+      } else {
+        await api.deleteTask(task.id)
+      }
       onTaskDeleted(task.id)
     } finally {
       setDeleting(false)
@@ -102,7 +125,20 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
 
       <div
-        style={{
+        style={isMobile ? {
+          position: 'fixed',
+          bottom: 0, left: 0, right: 0,
+          zIndex: 100,
+          background: '#1e1e2e',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: '16px 16px 0 0',
+          maxHeight: '82vh',
+          padding: 20,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          overflowY: 'auto',
+        } : {
           position: 'fixed',
           top: 0, right: 0, bottom: 0,
           width: 360,
@@ -116,46 +152,59 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
           overflowY: 'auto',
         }}
       >
+        {isMobile && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>Task details</h3>
           <button onClick={onClose} style={{ padding: '2px 8px', fontSize: 16 }}>✕</button>
         </div>
 
-        {/* State badge */}
-        <div style={fieldStyle}>
-          <span style={labelStyle}>STATE</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span
-              style={{
-                fontSize: 11,
-                padding: '3px 8px',
-                borderRadius: 10,
-                background: STATE_COLORS[task.state] ?? '#888',
-                color: '#fff',
-                fontWeight: 600,
-                letterSpacing: 0.3,
-              }}
-            >
-              {task.state}
-            </span>
-            {task.state === 'declined' && isProposer && (
-              <button
-                onClick={() => patch({ state: 'proposed' })}
+        {isRecurringFuture && (
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.05)', borderRadius: 6, padding: '6px 10px' }}>
+            ↻ Recurring — edits apply to this and all future instances
+          </div>
+        )}
+
+        {/* State badge — chores only */}
+        {task.task_type === 'chore' && (
+          <div style={fieldStyle}>
+            <span style={labelStyle}>STATE</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span
                 style={{
-                  fontSize: 12,
-                  padding: '3px 10px',
-                  borderRadius: 6,
-                  border: '1px solid rgba(59,130,246,0.4)',
-                  background: 'rgba(59,130,246,0.15)',
-                  color: '#93c5fd',
-                  cursor: 'pointer',
+                  fontSize: 11,
+                  padding: '3px 8px',
+                  borderRadius: 10,
+                  background: STATE_COLORS[task.state] ?? '#888',
+                  color: '#fff',
+                  fontWeight: 600,
+                  letterSpacing: 0.3,
                 }}
               >
-                Re-propose
-              </button>
-            )}
+                {task.state}
+              </span>
+              {task.state === 'declined' && isProposer && (
+                <button
+                  onClick={() => patch({ state: 'proposed' })}
+                  style={{
+                    fontSize: 12,
+                    padding: '3px 10px',
+                    borderRadius: 6,
+                    border: '1px solid rgba(59,130,246,0.4)',
+                    background: 'rgba(59,130,246,0.15)',
+                    color: '#93c5fd',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Re-propose
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Title */}
         <label style={fieldStyle}>
@@ -205,20 +254,49 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
           </select>
         </label>
 
-        {/* Recurrence */}
-        <label style={fieldStyle}>
-          <span style={labelStyle}>RECURRENCE</span>
-          <select
-            value={task.recurrence ?? ''}
-            onChange={(e) => patch({ recurrence: (e.target.value || null) as Task['recurrence'] })}
-            style={selectStyle}
-          >
-            <option value="">One-time</option>
-            <option value="weekly">Weekly</option>
-            <option value="biweekly">Every 2 weeks</option>
-            <option value="monthly">Monthly</option>
-          </select>
-        </label>
+        {/* Start / end time */}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <label style={{ ...fieldStyle, flex: 1 }}>
+            <span style={labelStyle}>START</span>
+            <select
+              value={task.start_time?.slice(0, 5) ?? ''}
+              onChange={(e) => patch({ start_time: e.target.value || null })}
+              style={selectStyle}
+            >
+              <option value="">—</option>
+              {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+
+          <label style={{ ...fieldStyle, flex: 1 }}>
+            <span style={labelStyle}>END</span>
+            <select
+              value={task.end_time?.slice(0, 5) ?? ''}
+              onChange={(e) => patch({ end_time: e.target.value || null })}
+              style={selectStyle}
+            >
+              <option value="">—</option>
+              {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+        </div>
+
+        {/* Recurrence — not available for meals */}
+        {task.task_type !== 'meal' && (
+          <label style={fieldStyle}>
+            <span style={labelStyle}>RECURRENCE</span>
+            <select
+              value={task.recurrence ?? ''}
+              onChange={(e) => patch({ recurrence: (e.target.value || null) as Task['recurrence'] })}
+              style={selectStyle}
+            >
+              <option value="">One-time</option>
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Every 2 weeks</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </label>
+        )}
 
         {/* Assigned to */}
         <label style={fieldStyle}>
@@ -272,7 +350,7 @@ export default function TaskDetailPanel({ task, members, currentUserId, onClose,
                 opacity: deleting ? 0.6 : 1,
               }}
             >
-              {deleting ? 'Deleting…' : 'Delete task'}
+              {deleting ? 'Deleting…' : isRecurringFuture ? 'Delete this + future' : 'Delete task'}
             </button>
           </div>
         )}

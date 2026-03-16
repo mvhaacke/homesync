@@ -5,9 +5,10 @@ import type { HouseholdInvite, HouseholdMember } from '../lib/api'
 interface Props {
   householdId: string
   members: HouseholdMember[]
+  mobile?: boolean
 }
 
-export default function MembersPanel({ householdId, members }: Props) {
+export default function MembersPanel({ householdId, members, mobile }: Props) {
   const [invite, setInvite] = useState<HouseholdInvite | null>(null)
   const [generating, setGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -35,10 +36,10 @@ export default function MembersPanel({ householdId, members }: Props) {
   return (
     <div
       style={{
-        width: 200,
+        width: mobile ? '100%' : 200,
         flexShrink: 0,
         background: '#1e1e2e',
-        borderLeft: '1px solid rgba(255,255,255,0.12)',
+        borderLeft: mobile ? 'none' : '1px solid rgba(255,255,255,0.12)',
         padding: '12px 14px',
         display: 'flex',
         flexDirection: 'column',

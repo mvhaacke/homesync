@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import type { Task, HouseholdMember } from '../lib/api'
 import type { DayMeta } from '../lib/weekUtils'
 import TaskCard from './TaskCard'
-import AddTaskForm from './AddTaskForm'
+import CreateTaskModal from './CreateTaskModal'
 
 interface Props {
   day: DayMeta
@@ -38,7 +38,15 @@ export default function DayColumn({
   onTaskDone,
 }: Props) {
   const [isOver, setIsOver] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
   const counter = useRef(0)
+
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (!a.start_time && !b.start_time) return 0
+    if (!a.start_time) return 1
+    if (!b.start_time) return -1
+    return a.start_time.localeCompare(b.start_time)
+  })
 
   return (
     <div
@@ -51,6 +59,7 @@ export default function DayColumn({
         setIsOver(false)
         onDrop(e.dataTransfer.getData('taskId'), day.day)
       }}
+      onClick={() => setShowCreate(true)}
       style={{
         flex: 1,
         minWidth: 120,
@@ -61,6 +70,7 @@ export default function DayColumn({
         border: '1px solid rgba(255,255,255,0.08)',
         background: isOver ? 'rgba(100,108,255,0.1)' : 'rgba(255,255,255,0.02)',
         transition: 'background 0.15s',
+        cursor: 'pointer',
       }}
     >
       <div
@@ -75,7 +85,7 @@ export default function DayColumn({
         {day.label.toUpperCase()}
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {tasks.map((task) => (
+        {sortedTasks.map((task) => (
           <TaskCard
             key={task.id}
             task={task}
@@ -90,13 +100,16 @@ export default function DayColumn({
           />
         ))}
       </div>
-      <AddTaskForm
-        householdId={householdId}
-        dayWindow={day.day}
-        weekStart={weekMonday}
-        members={members}
-        onCreated={onTaskCreated}
-      />
+      {showCreate && (
+        <CreateTaskModal
+          householdId={householdId}
+          dayWindow={day.day}
+          weekStart={weekMonday}
+          members={members}
+          onCreated={onTaskCreated}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
     </div>
   )
 }

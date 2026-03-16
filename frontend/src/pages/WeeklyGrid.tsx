@@ -9,13 +9,21 @@ import TaskDetailPanel from '../components/TaskDetailPanel'
 import ShoppingListPanel from '../components/ShoppingListPanel'
 import MembersPanel from '../components/MembersPanel'
 import ProfilePanel from '../components/ProfilePanel'
+import BottomSheet from '../components/BottomSheet'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { supabase } from '../lib/supabase'
+
+function getTodayDayIndex(): number {
+  const day = new Date().getDay() // 0=Sun..6=Sat
+  return day === 0 ? 6 : day - 1  // Mon=0..Sun=6
+}
 
 interface Props {
   householdId: string
 }
 
 export default function WeeklyGrid({ householdId }: Props) {
+  const isMobile = useIsMobile()
   const [weekMonday, setWeekMonday] = useState<string>(currentWeekMonday)
   const [tasks, setTasks] = useState<Task[]>([])
   const [members, setMembers] = useState<HouseholdMember[]>([])
@@ -25,6 +33,9 @@ export default function WeeklyGrid({ householdId }: Props) {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null)
   const [showShopping, setShowShopping] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [mobileDayIndex, setMobileDayIndex] = useState(getTodayDayIndex)
+  const [showBacklogSheet, setShowBacklogSheet] = useState(false)
+  const [showMembersSheet, setShowMembersSheet] = useState(false)
 
   // Initial data load
   useEffect(() => {
@@ -107,22 +118,6 @@ export default function WeeklyGrid({ householdId }: Props) {
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, state: 'done' } : t)))
     try {
       await api.patchTask(taskId, { state: 'done' })
-      if (task.recurrence && task.week_start) {
-        const days = task.recurrence === 'weekly' ? 7 : task.recurrence === 'biweekly' ? 14 : 28
-        const next = new Date(task.week_start)
-        next.setUTCDate(next.getUTCDate() + days)
-        const nextWeekStart = next.toISOString().split('T')[0]
-        const newTask = await api.createTask(task.household_id, {
-          title: task.title,
-          description: task.description ?? undefined,
-          task_type: task.task_type,
-          assigned_to: task.assigned_to ?? undefined,
-          day_window: task.day_window ?? undefined,
-          week_start: nextWeekStart,
-          recurrence: task.recurrence,
-        })
-        setTasks((prev) => [...prev, newTask])
-      }
     } catch {
       setTasks((prev) => prev.map((t) => (t.id === taskId ? task : t)))
     }
@@ -142,8 +137,180 @@ export default function WeeklyGrid({ householdId }: Props) {
 
   const selectedTask = selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) : null
 
+  function handlePrevDay() {
+    if (mobileDayIndex > 0) {
+      setMobileDayIndex((i) => i - 1)
+    } else {
+      setWeekMonday((m) => shiftWeek(m, -1))
+      setMobileDayIndex(6)
+    }
+  }
+
+  function handleNextDay() {
+    if (mobileDayIndex < 6) {
+      setMobileDayIndex((i) => i + 1)
+    } else {
+      setWeekMonday((m) => shiftWeek(m, 1))
+      setMobileDayIndex(0)
+    }
+  }
+
+  // Shared panels rendered on both layouts
+  const sharedPanels = (
+    <>
+      {selectedTask && (
+        <TaskDetailPanel
+          task={selectedTask}
+          members={members}
+          currentUserId={currentUserId}
+          isMobile={isMobile}
+          onClose={() => setSelectedTaskId(null)}
+          onTaskUpdated={(updated) => setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))}
+          onTaskDeleted={handleDeleteTask}
+        />
+      )}
+      {showShopping && (
+        <ShoppingListPanel
+          householdId={householdId}
+          weekStart={weekMonday}
+          onClose={() => setShowShopping(false)}
+        />
+      )}
+      {showProfile && currentMember && (
+        <ProfilePanel
+          member={currentMember}
+          onSaved={handleProfileSaved}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
+    </>
+  )
+
   if (loading) return <p style={{ padding: 40 }}>Loading…</p>
 
+  // ── Mobile layout ──────────────────────────────────────────────
+  if (isMobile) {
+    const today = days[mobileDayIndex]
+    const todayTasks = scheduledTasks.filter((t) => t.day_window === today.day)
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', flexShrink: 0 }}>
+          <h2 style={{ margin: 0, fontSize: 16 }}>HomeSync</h2>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {currentMember && (
+              <button
+                onClick={() => setShowProfile((s) => !s)}
+                title="Edit profile"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '4px 10px' }}
+              >
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: currentMember.color ?? '#888', flexShrink: 0 }} />
+                {currentMember.display_name}
+              </button>
+            )}
+            <button onClick={() => supabase.auth.signOut()} style={{ fontSize: 12, padding: '4px 10px' }}>
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {/* Day nav */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '4px 16px 8px', flexShrink: 0, gap: 8 }}>
+          <button onClick={handlePrevDay} style={{ padding: '6px 14px', fontSize: 16 }}>‹</button>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{today.label}</div>
+          </div>
+          <button
+            onClick={() => { setWeekMonday(currentWeekMonday); setMobileDayIndex(getTodayDayIndex()) }}
+            style={{ fontSize: 12, padding: '4px 10px' }}
+          >
+            Today
+          </button>
+          <button onClick={handleNextDay} style={{ padding: '6px 14px', fontSize: 16 }}>›</button>
+        </div>
+
+        {/* Day column — scrollable, padded above bottom nav */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px', paddingBottom: 72 }}>
+          <DayColumn
+            day={today}
+            weekMonday={weekMonday}
+            householdId={householdId}
+            tasks={todayTasks}
+            members={members}
+            currentUserId={currentUserId}
+            draggingTaskId={draggingTaskId}
+            onDragStart={setDraggingTaskId}
+            onDragEnd={() => setDraggingTaskId(null)}
+            onDrop={(taskId, dayWindow) => handleDrop(taskId, dayWindow)}
+            onTaskClick={setSelectedTaskId}
+            onTaskCreated={(task) => setTasks((prev) => [task, ...prev])}
+            onTaskStateChanged={handleStateChange}
+            onTaskDone={handleDone}
+          />
+        </div>
+
+        {/* Bottom nav bar */}
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0,
+          height: 56, background: '#1e1e2e',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
+          display: 'flex', zIndex: 40,
+        }}>
+          {[
+            { label: 'Backlog', icon: '📋', action: () => setShowBacklogSheet(true) },
+            { label: 'Members', icon: '👥', action: () => setShowMembersSheet(true) },
+            { label: 'Shopping', icon: '🛒', action: () => setShowShopping((s) => !s) },
+          ].map(({ label, icon, action }) => (
+            <button
+              key={label}
+              onClick={action}
+              style={{
+                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                justifyContent: 'center', gap: 2, background: 'transparent',
+                border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 10,
+              }}
+            >
+              <span style={{ fontSize: 20 }}>{icon}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Backlog sheet */}
+        {showBacklogSheet && (
+          <BottomSheet title="Backlog" onClose={() => setShowBacklogSheet(false)}>
+            <BacklogColumn
+              mobile
+              householdId={householdId}
+              tasks={backlogTasks}
+              members={members}
+              currentUserId={currentUserId}
+              draggingTaskId={draggingTaskId}
+              onDragStart={setDraggingTaskId}
+              onDragEnd={() => setDraggingTaskId(null)}
+              onDrop={(taskId) => handleDrop(taskId, null)}
+              onTaskClick={(id) => { setShowBacklogSheet(false); setSelectedTaskId(id) }}
+              onTaskCreated={(task) => setTasks((prev) => [task, ...prev])}
+              onTaskStateChanged={handleStateChange}
+              onTaskDone={handleDone}
+            />
+          </BottomSheet>
+        )}
+
+        {/* Members sheet */}
+        {showMembersSheet && (
+          <BottomSheet title="Members" onClose={() => setShowMembersSheet(false)}>
+            <MembersPanel mobile householdId={householdId} members={members} />
+          </BottomSheet>
+        )}
+
+        {sharedPanels}
+      </div>
+    )
+  }
+
+  // ── Desktop layout ─────────────────────────────────────────────
   return (
     <div
       style={{
@@ -194,6 +361,7 @@ export default function WeeklyGrid({ householdId }: Props) {
         monday={weekMonday}
         onPrev={() => setWeekMonday((m) => shiftWeek(m, -1))}
         onNext={() => setWeekMonday((m) => shiftWeek(m, 1))}
+        onToday={() => setWeekMonday(currentWeekMonday)}
       />
 
       {/* Grid area */}
@@ -244,32 +412,7 @@ export default function WeeklyGrid({ householdId }: Props) {
         <MembersPanel householdId={householdId} members={members} />
       </div>
 
-      {selectedTask && (
-        <TaskDetailPanel
-          task={selectedTask}
-          members={members}
-          currentUserId={currentUserId}
-          onClose={() => setSelectedTaskId(null)}
-          onTaskUpdated={(updated) => setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))}
-          onTaskDeleted={handleDeleteTask}
-        />
-      )}
-
-      {showShopping && (
-        <ShoppingListPanel
-          householdId={householdId}
-          weekStart={weekMonday}
-          onClose={() => setShowShopping(false)}
-        />
-      )}
-
-      {showProfile && currentMember && (
-        <ProfilePanel
-          member={currentMember}
-          onSaved={handleProfileSaved}
-          onClose={() => setShowProfile(false)}
-        />
-      )}
+      {sharedPanels}
     </div>
   )
 }

@@ -2,6 +2,10 @@ import { supabase } from './supabase'
 
 // ---- Types ----
 
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export interface Profile { id: string; display_name: string; color: string }
 export interface UserHousehold { household_id: string; household_name: string; role: string }
 
@@ -48,10 +52,12 @@ export interface Task {
   proposed_by: string | null
   assigned_to: string | null
   day_window: string | null
-  time_of_day: string | null
+  start_time: string | null
+  end_time: string | null
   duration_minutes: number | null
   week_start: string | null
   recurrence: 'weekly' | 'biweekly' | 'monthly' | null
+  recurrence_series_id: string | null
   created_at: string
   updated_at: string
   ingredients: Ingredient[]
@@ -81,10 +87,12 @@ export type CreateTaskPayload = Pick<Task, 'title'> &
       | 'task_type'
       | 'assigned_to'
       | 'day_window'
-      | 'time_of_day'
+      | 'start_time'
+      | 'end_time'
       | 'duration_minutes'
       | 'week_start'
       | 'recurrence'
+      | 'recurrence_series_id'
       | 'ingredients'
     >
   >
@@ -210,9 +218,10 @@ export const api = {
 
   createTask: async (householdId: string, task: CreateTaskPayload): Promise<Task> => {
     const userId = await getUserId()
+    const state = task.task_type && task.task_type !== 'chore' ? 'accepted' : 'proposed'
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ ...task, household_id: householdId, proposed_by: userId })
+      .insert({ ...task, household_id: householdId, proposed_by: userId, state })
       .select()
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Create failed')
@@ -315,6 +324,53 @@ export const api = {
 
   deleteTask: async (taskId: string): Promise<void> => {
     const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+    if (error) throw new Error(error.message)
+  },
+
+  createRecurringSeries: async (
+    householdId: string,
+    base: CreateTaskPayload & { recurrence: NonNullable<Task['recurrence']>; week_start: string },
+  ): Promise<Task[]> => {
+    const userId = await getUserId()
+    const seriesId = crypto.randomUUID()
+    const stepDays = base.recurrence === 'weekly' ? 7 : base.recurrence === 'biweekly' ? 14 : 28
+    const instanceCount = 12
+    const state = base.task_type && base.task_type !== 'chore' ? 'accepted' : 'proposed'
+
+    const instances = []
+    const cursor = new Date(base.week_start + 'T00:00:00')
+    for (let i = 0; i < instanceCount; i++) {
+      instances.push({
+        ...base,
+        household_id: householdId,
+        proposed_by: userId,
+        state,
+        recurrence_series_id: seriesId,
+        week_start: isoDate(cursor),
+      })
+      cursor.setDate(cursor.getDate() + stepDays)
+    }
+
+    const { data, error } = await supabase.from('tasks').insert(instances).select()
+    if (error || !data) throw new Error(error?.message ?? 'Create series failed')
+    return data as Task[]
+  },
+
+  patchSeriesFromDate: async (seriesId: string, fromWeekStart: string, fields: Partial<Task>): Promise<void> => {
+    const { error } = await supabase
+      .from('tasks')
+      .update(fields)
+      .eq('recurrence_series_id', seriesId)
+      .gte('week_start', fromWeekStart)
+    if (error) throw new Error(error.message)
+  },
+
+  deleteSeriesFromDate: async (seriesId: string, fromWeekStart: string): Promise<void> => {
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('recurrence_series_id', seriesId)
+      .gte('week_start', fromWeekStart)
     if (error) throw new Error(error.message)
   },
 

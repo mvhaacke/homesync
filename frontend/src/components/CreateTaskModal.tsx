@@ -3,6 +3,14 @@ import { api } from '../lib/api'
 import type { HouseholdMember, Ingredient, MealTemplate, Task } from '../lib/api'
 
 const TYPE_OPTIONS = ['chore', 'meal', 'event', 'todo']
+
+const TIME_OPTIONS: string[] = []
+for (let h = 0; h < 24; h++) {
+  for (let m = 0; m < 60; m += 15) {
+    TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+  }
+}
+
 const RECURRENCE_OPTIONS = [
   { value: '', label: 'One-time' },
   { value: 'weekly', label: 'Weekly' },
@@ -33,6 +41,8 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
   const [taskType, setTaskType] = useState('chore')
   const [assignedTo, setAssignedTo] = useState('')
   const [recurrence, setRecurrence] = useState('')
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -66,22 +76,33 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
     setShowDropdown(false)
   }
 
+  const canRecur = taskType !== 'meal' && weekStart !== null
+  const instanceCount = recurrence === 'weekly' ? 12 : recurrence === 'biweekly' ? 12 : 12
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim()) return
     setSubmitting(true)
     try {
-      const task = await api.createTask(householdId, {
+      const base = {
         title: title.trim(),
         task_type: taskType,
         assigned_to: assignedTo || undefined,
         recurrence: (recurrence || null) as Task['recurrence'],
+        start_time: startTime || undefined,
+        end_time: endTime || undefined,
         description: notes.trim() || undefined,
         day_window: dayWindow ?? undefined,
-        week_start: weekStart ?? undefined,
         ingredients: selectedIngredients.length > 0 ? selectedIngredients : undefined,
-      })
-      onCreated(task)
+      }
+
+      if (canRecur && recurrence && weekStart) {
+        const tasks = await api.createRecurringSeries(householdId, { ...base, recurrence, week_start: weekStart })
+        onCreated(tasks[0])
+      } else {
+        const task = await api.createTask(householdId, { ...base, week_start: weekStart ?? undefined })
+        onCreated(task)
+      }
       onClose()
     } finally {
       setSubmitting(false)
@@ -91,11 +112,12 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={(e) => { e.stopPropagation(); onClose() }}
         style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.5)' }}
       />
 
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           position: 'fixed',
           top: '50%', left: '50%',
@@ -123,15 +145,35 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
           <div style={{ display: 'flex', gap: 12 }}>
             <label style={{ ...fieldStyle, flex: 1 }}>
               <span style={labelStyle}>TYPE</span>
-              <select value={taskType} onChange={(e) => { setTaskType(e.target.value); setSelectedIngredients([]); setMealSearch('') }} style={selectStyle}>
+              <select value={taskType} onChange={(e) => { setTaskType(e.target.value); setSelectedIngredients([]); setMealSearch(''); setRecurrence('') }} style={selectStyle}>
                 {TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>
 
+            {canRecur && (
+              <label style={{ ...fieldStyle, flex: 1 }}>
+                <span style={labelStyle}>RECURRENCE</span>
+                <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)} style={selectStyle}>
+                  {RECURRENCE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 12 }}>
             <label style={{ ...fieldStyle, flex: 1 }}>
-              <span style={labelStyle}>RECURRENCE</span>
-              <select value={recurrence} onChange={(e) => setRecurrence(e.target.value)} style={selectStyle}>
-                {RECURRENCE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              <span style={labelStyle}>START</span>
+              <select value={startTime} onChange={(e) => setStartTime(e.target.value)} style={selectStyle}>
+                <option value="">—</option>
+                {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+
+            <label style={{ ...fieldStyle, flex: 1 }}>
+              <span style={labelStyle}>END</span>
+              <select value={endTime} onChange={(e) => setEndTime(e.target.value)} style={selectStyle}>
+                <option value="">—</option>
+                {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>
           </div>
@@ -226,6 +268,12 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
             </p>
           )}
 
+          {canRecur && recurrence && (
+            <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+              Creates {instanceCount} instances ({recurrence === 'weekly' ? '12 weeks' : recurrence === 'biweekly' ? '24 weeks' : '12 months'} ahead)
+            </p>
+          )}
+
           <button
             type="submit"
             disabled={submitting || !title.trim()}
@@ -237,7 +285,7 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
               opacity: submitting || !title.trim() ? 0.6 : 1,
             }}
           >
-            {submitting ? 'Creating…' : 'Create task'}
+            {submitting ? 'Creating…' : canRecur && recurrence ? `Create ${instanceCount} tasks` : 'Create task'}
           </button>
         </form>
       </div>

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Task, HouseholdMember } from '../lib/api'
 import TaskCard from './TaskCard'
-import AddTaskForm from './AddTaskForm'
+import CreateTaskModal from './CreateTaskModal'
 
 interface Props {
   householdId: string
@@ -9,6 +9,7 @@ interface Props {
   members: HouseholdMember[]
   currentUserId: string
   draggingTaskId: string | null
+  mobile?: boolean
   onDragStart: (id: string) => void
   onDragEnd: () => void
   onDrop: (taskId: string) => void
@@ -24,6 +25,7 @@ export default function BacklogColumn({
   members,
   currentUserId,
   draggingTaskId,
+  mobile,
   onDragStart,
   onDragEnd,
   onDrop,
@@ -33,7 +35,15 @@ export default function BacklogColumn({
   onTaskDone,
 }: Props) {
   const [isOver, setIsOver] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
   const counter = useRef(0)
+
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (!a.start_time && !b.start_time) return 0
+    if (!a.start_time) return 1
+    if (!b.start_time) return -1
+    return a.start_time.localeCompare(b.start_time)
+  })
 
   return (
     <div
@@ -46,16 +56,18 @@ export default function BacklogColumn({
         setIsOver(false)
         onDrop(e.dataTransfer.getData('taskId'))
       }}
+      onClick={() => setShowCreate(true)}
       style={{
-        width: 200,
+        width: mobile ? '100%' : 200,
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
         padding: '8px 6px',
-        borderRadius: 8,
-        border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: mobile ? 0 : 8,
+        border: mobile ? 'none' : '1px solid rgba(255,255,255,0.08)',
         background: isOver ? 'rgba(100,108,255,0.1)' : 'rgba(255,255,255,0.02)',
         transition: 'background 0.15s',
+        cursor: 'pointer',
       }}
     >
       <div
@@ -70,7 +82,7 @@ export default function BacklogColumn({
         BACKLOG
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {tasks.map((task) => (
+        {sortedTasks.map((task) => (
           <TaskCard
             key={task.id}
             task={task}
@@ -85,13 +97,16 @@ export default function BacklogColumn({
           />
         ))}
       </div>
-      <AddTaskForm
-        householdId={householdId}
-        dayWindow={null}
-        weekStart={null}
-        members={members}
-        onCreated={onTaskCreated}
-      />
+      {showCreate && (
+        <CreateTaskModal
+          householdId={householdId}
+          dayWindow={null}
+          weekStart={null}
+          members={members}
+          onCreated={onTaskCreated}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
     </div>
   )
 }
