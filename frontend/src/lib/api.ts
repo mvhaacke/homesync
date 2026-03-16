@@ -347,6 +347,7 @@ export const api = {
         state,
         recurrence_series_id: seriesId,
         week_start: isoDate(cursor),
+        ingredients: base.ingredients ?? [],
       })
       cursor.setDate(cursor.getDate() + stepDays)
     }
