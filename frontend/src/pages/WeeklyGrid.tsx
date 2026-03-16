@@ -231,8 +231,9 @@ export default function WeeklyGrid({ householdId }: Props) {
         </div>
 
         {/* Day column — scrollable, padded above bottom nav */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px', paddingBottom: 72 }}>
+        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 72 }}>
           <DayColumn
+            mobile
             day={today}
             weekMonday={weekMonday}
             householdId={householdId}

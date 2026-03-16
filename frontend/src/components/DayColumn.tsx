@@ -12,6 +12,7 @@ interface Props {
   members: HouseholdMember[]
   currentUserId: string
   draggingTaskId: string | null
+  mobile?: boolean
   onDragStart: (id: string) => void
   onDragEnd: () => void
   onDrop: (taskId: string, day: string) => void
@@ -29,6 +30,7 @@ export default function DayColumn({
   members,
   currentUserId,
   draggingTaskId,
+  mobile,
   onDragStart,
   onDragEnd,
   onDrop,
@@ -61,14 +63,17 @@ export default function DayColumn({
       }}
       onClick={() => setShowCreate(true)}
       style={{
-        flex: 1,
-        minWidth: 120,
+        flex: mobile ? undefined : 1,
+        width: mobile ? '100%' : undefined,
+        minWidth: mobile ? undefined : 120,
+        minHeight: mobile ? 'calc(100dvh - 180px)' : undefined,
+        boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
         padding: '8px 6px',
-        borderRadius: 8,
-        border: '1px solid rgba(255,255,255,0.08)',
-        background: isOver ? 'rgba(100,108,255,0.1)' : 'rgba(255,255,255,0.02)',
+        borderRadius: mobile ? 0 : 8,
+        border: mobile ? 'none' : '1px solid rgba(255,255,255,0.08)',
+        background: isOver ? 'rgba(100,108,255,0.1)' : 'transparent',
         transition: 'background 0.15s',
         cursor: 'pointer',
       }}

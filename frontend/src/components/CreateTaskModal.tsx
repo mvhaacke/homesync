@@ -123,7 +123,7 @@ export default function CreateTaskModal({ householdId, dayWindow, weekStart, mem
           top: '50%', left: '50%',
           transform: 'translate(-50%, -50%)',
           zIndex: 200,
-          width: 420,
+          width: 'min(420px, calc(100vw - 24px))',
           background: '#1e1e2e',
           borderRadius: 12,
           border: '1px solid rgba(255,255,255,0.12)',
